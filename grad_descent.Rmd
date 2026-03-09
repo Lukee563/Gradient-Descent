@@ -1,0 +1,224 @@
+---
+title: "Gradient Descent Algorithm Design"
+author: "Luke Catalano"
+date: "2026-03-09"
+output: pdf_document
+---
+## Objective
+Iterative optimization algorithms are used behind the scenes in nearly every machine learnign framework. The objective of this workbook is to combine my experiences in AM230, Econ 217, and Econ 294A by implementing a gradient descent algorithm from scratch on the credit dataset to predit the credit score of indiviuduals with "relative accuracy". Pre-packaged regularized regression models achieve 90\% weighted accuracy on the 80 test observations, so i'm hoping to beat this through my own custom algorithm.
+
+```{r,include=FALSE, message=FALSE, warning=FALSE}
+rm(list=ls())
+library(ISLR2)
+library(dplyr)
+library(tidyr)
+library(glmnet)
+library(ggplot2)
+library(tictoc)
+data("Credit")
+```
+
+## Dataframe Structure
+```{r,echo=FALSE}
+head(Credit,3)
+```
+
+## Numeric Conversion
+```{r}
+Credit <- Credit %>%
+  mutate(
+    Own = if_else(Own == "Yes", 1, 0),
+    Student = if_else(Student == "Yes", 1, 0),
+    Married = if_else(Married == "Yes", 1, 0),
+    Region = as.integer(Region))
+head(Credit,3)
+```
+
+## Select Outcome Variable, Scale the Covariates
+```{r}
+y <- as.matrix(Credit$Rating)
+X <- Credit %>%
+  select(-Rating)
+
+X <- scale(X)
+head(round(X,3),3)
+```
+
+\newpage
+
+## Matrix Construction 
+```{r,echo = FALSE}
+# Adding Intercept
+X <- cbind(1, X)
+```
+Adding the intercept column to our X matrix completes the regression setup. 
+\[
+\begin{bmatrix}
+1 & X_{21} & X_{31} &\dots & X_{(m+1)1} \\
+1 & X_{22} & X_{32} &\dots & X_{(m+1)2} \\
+\vdots & \vdots & \vdots & \vdots & \vdots \\
+1 & X_{2n} & X_{3n} &\dots & X_{(m+1)n}
+\end{bmatrix}_{(m+1)\times n}
+\]
+
+## Problem formulation and objective
+
+We seek to achieve local convergence with a gradient descent algorithm, on a 2024 M4 Pro Macbook, ran locally. This is a much simpler task than global convergence, and our small sample size (n = 400) and feature space of (m = 10) simplify this problem greatly. Because gradient descent is an iterative algorithm with sequential parameter updates, parallelization provides limited benefits for small datasets. We begin with the following model specification:
+
+\vspace{-0.5cm}
+\[
+y = X\beta
+\]
+
+Where $y$ is a vector of credit ratings, $X$ is a matrix of feature values, and $\beta \in \mathbb{R}^{m+1}$ is the vector of regression coefficients. By iteratively updating our coefficient vector optimally, we decrease the following loss function: 
+
+\[
+L(\beta) = \frac{1}{n} \sum^{n}_{i=1}(y_{i} - X_{i}\beta)^2
+\]
+
+## Gradient Descent Framework
+
+Each update to our coefficient vector follows a descent direction criteria, ensuring we always move toward the optimal $\beta^*$, the parameter vector that minimizes our error.
+
+\[
+\beta_{k+1} = \beta_{k} - \alpha p_k
+\]
+
+where $\alpha$ is a step size, determining how far of a step we take in m-dimensional space when attempting to decrease the loss function. For this problem formulation, we will keep $\alpha$ contant at 0.01. $p_k$ is a direction equivalent to the negative gradient of the loss function at step k ($p_k = - \nabla L(\beta_k)$). The gradient of the loss function represents the direction of steepest increase. Therefore, updating parameters in the negative gradient direction produces the steepest decrease in the loss. These iterative updates ensure we are always traveling in the direction that decreases the loss function the fastest. We define the gradient of the loss function at iteration k as follows:
+
+\[
+\nabla L(\beta_k) = \frac{2}{n} \sum^{n}_{i=1}(y_i - X_i \beta_k) \times -X_i = \frac{2}{n} X^T(X\beta_k - y)
+\]
+
+## Memory Usage Assuming 8 bytes per entry:
+
+With 11 total parameters, and 8 bytes per entry, our $\beta$ parameter vector only takes up 88 bytes. Our gradient $\nabla L(\beta)$ is constructed of two matrices multiplies together. $X^T$ is an $11 \times 400$ matrix, and $(X\beta_k - y)$ is a $400 \times 1$ vector, which results in a gradient matrix with $11 \times 1 = 11$ total entries, which equates to the same 88 bytes of storage required to store the parameter vector. The storage and computation of our gradient computationally cheap. Gradient Descent does not require the computation of a Hessian. It is worth noting, however, that second order methods would only require $8(11)^2 = 968$ bytes, making second order methods computationally reasonable for a problem of this size. 
+
+## Setup
+```{r}
+# Initialize our parameter vector with random values pulled from a normal distribution
+set.seed(0)
+Xt <- t(X) # transpose of feature matrix 
+m <- ncol(X) # Number of coefficients
+n <- nrow(X) # Number of observations
+a <- 0.1 # step size = 0.01
+B <- as.matrix(rnorm(m, 0, 1)) # Initialization vector from normal dist.
+error_vector <- c()
+error <- (1/n)*sum((y - X%*%B)^2) # error function
+error_diff <- 1 # Difference in error between iterations, used for stopping the loop
+iter <- 1 # iteration counter
+```
+
+## Implementation 
+```{r}
+while (error_diff > 0.001){
+  
+  # Update and Error calculation 
+  gradient <- (2/n)*Xt%*%((X%*%B)- y) # Gradient of param vector
+  B <- B - a*gradient # Gradient Descent
+  error <- (1/n)*sum((y - X%*%B)^2) # Error recalculation
+  error_vector[iter] <- error # Store the error for this iteation
+  
+  # Evaluate stopping criteria 
+  if(iter > 1){
+    error_diff <- abs(error_vector[iter]-error_vector[iter-1])
+  }
+  else{
+    error_diff <- 1
+  }
+  iter <- iter + 1 # increase iteration
+}
+cat("Grad Descent Successfully Converged in", iter, 
+    "iterations with an error of", error, sep=" ")
+```
+
+```{r, echo = FALSE, fig.width=7, fig.height=2.5}
+plot_data <- data.frame(
+  iteration = 1:length(error_vector),
+  error = error_vector
+)
+
+ggplot(plot_data, aes(x = iteration, y = error)) +
+  geom_line(color = "blue") +
+  scale_y_log10() + 
+  labs(
+    title = paste("Gradient Descent Error over", iter, "Iterations"),
+    x = "Iteration Number",
+    y = "Mean Squared Error (Log Scale)"
+  ) +
+  theme_minimal()
+```
+
+## Model testing
+
+We will now train our model on a base set of training data and evaluate its performance on unseen testing data. Our benchmark to beat is roughly 90% accuracy from basic regularized regression. 
+
+```{r}
+p <- 0.8 # Split Parameter
+split <- round(p*nrow(X))
+
+X_train <- X[1:split, ]
+y_train <- as.matrix(y[1:split,])
+X_test <- X[(split+1):400, ]
+y_test <- as.matrix(y[(split+1):400, ])
+
+# Setup
+set.seed(0)
+Xt <- t(X_train) # transpose of feature matrix
+m <- ncol(X_train) # Number of coefficients
+n <- nrow(X_train) # Number of observations
+a <- 0.1 # step size = 0.1
+B <- as.matrix(rnorm(m, 0, 1)) # Initialization vector from normal dist.
+error_vector <- c()
+error <- (1/n)*sum((y_train - X_train%*%B)^2) # error function
+error_diff <- 1 # Difference in error between iterations, used for stopping the loop
+iter <- 1 # iteration counter
+
+# Gradient Descent 
+while (error_diff > 0.001){
+  
+  # Update and Error calculation 
+  gradient <- (2/n)*Xt%*%((X_train%*%B)- y_train) # Gradient of param vector
+  B <- B - a*gradient # Gradient Descent
+  error <- (1/n)*sum((y_train - X_train%*%B)^2) # Error recalculation
+  error_vector[iter] <- error # Store the error for this iteation
+  
+  # Evaluate stopping criteria 
+  if(iter > 1){
+    error_diff <- abs(error_vector[iter]-error_vector[iter-1])
+  } else{ error_diff <- 1 }
+  iter <- iter + 1 # increase iteration
+}
+cat("Grad Descent Successfully Converged in", iter, 
+    "iterations with an error of", error, sep=" ")
+
+# Model Testing
+predictions <- X_test %*% B
+
+# Weighted Absolute Percent Error
+WAPE <- sum(abs(y_test - predictions))/sum(y_test)
+Accuracy <- 1 - WAPE
+cat("Model Accuracy: ", round(Accuracy*100,2), "%", sep="")
+```
+## Futher Testing 
+```{r}
+X_Test_df <- as.data.frame(X_test)
+X_Test_df$Credit_Score <- as.data.frame(y_test)
+X_Test_df$Prediction <- as.data.frame(predictions)
+X_Test_df$error <- abs(X_Test_df$Credit_Score - X_Test_df$Prediction)
+
+X_Test_df <- data.frame(
+  real = as.numeric(y_test),
+  preds = as.numeric(predictions)
+)
+
+ggplot(X_Test_df, mapping = aes(x=real, y=preds))+
+  geom_point(color='royalblue')+
+  labs(
+    title = paste("Predicted Versus Actual Credit Rating, Accuracy = ", 
+                  round(Accuracy*100,2), "%", sep=""),
+    x = "Real Credit Score",
+    y = "Predicted Credit Score"
+  )
+```
+We have successfully achieved an accuracy of ~98.00%, significantly outperforming the prepackaged regularized regression models.
