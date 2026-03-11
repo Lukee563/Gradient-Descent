@@ -98,7 +98,6 @@ With 11 total parameters, and 8 bytes per entry, our $\beta$ parameter vector on
 ```{r}
 # Initialize our parameter vector with random values pulled from a normal distribution
 set.seed(0)
-Xt <- t(X) # transpose of feature matrix 
 m <- ncol(X) # Number of coefficients
 n <- nrow(X) # Number of observations
 a <- 0.1 # step size = 0.01
@@ -111,12 +110,15 @@ iter <- 1 # iteration counter
 
 ## Implementation 
 ```{r}
+source("methods/mse_loss.R") # Calculates the error using the MSE loss function
+source("methods/grad_mse_loss.R") # Returns Negative Gradient of MSE loss function
+
 while (error_diff > 0.001){
   
   # Update and Error calculation 
-  gradient <- (2/n)*Xt%*%((X%*%B)- y) # Gradient of param vector
-  B <- B - a*gradient # Gradient Descent
-  error <- (1/n)*sum((y - X%*%B)^2) # Error recalculation
+  gradient <- grad_mse_loss(y, X, B) # Gradient of param vector
+  B <- B - a * gradient # Gradient Descent
+  error <- mse_loss(y, X, B) # Error recalculation
   error_vector[iter] <- error # Store the error for this iteation
   
   # Evaluate stopping criteria 
@@ -157,30 +159,31 @@ We will now train our model on a base set of training data and evaluate its perf
 p <- 0.8 # Split Parameter
 split <- round(p*nrow(X))
 
+m <- ncol(X) # Number of coefficients
+
 X_train <- X[1:split, ]
-y_train <- as.matrix(y[1:split,])
-X_test <- X[(split+1):400, ]
-y_test <- as.matrix(y[(split+1):400, ])
+X_test <- X[(split+1):nrow(X), ]
+y_train <- as.matrix(y[1:split])
+y_test <- as.matrix(y[(split+1):nrow(X)])
 
 # Setup
+max_iter <- 10000
 set.seed(0)
-Xt <- t(X_train) # transpose of feature matrix
-m <- ncol(X_train) # Number of coefficients
-n <- nrow(X_train) # Number of observations
+n <- nrow(X_train) # Number of training observations
 a <- 0.1 # step size = 0.1
 B <- as.matrix(rnorm(m, 0, 1)) # Initialization vector from normal dist.
-error_vector <- c()
-error <- (1/n)*sum((y_train - X_train%*%B)^2) # error function
+error_vector <- numeric()
+error <- mse_loss(y_train, X_train, B) # MSE loss function
 error_diff <- 1 # Difference in error between iterations, used for stopping the loop
 iter <- 1 # iteration counter
 
 # Gradient Descent 
-while (error_diff > 0.001){
+while (error_diff > 0.001 && iter < max_iter){
   
   # Update and Error calculation 
-  gradient <- (2/n)*Xt%*%((X_train%*%B)- y_train) # Gradient of param vector
-  B <- B - a*gradient # Gradient Descent
-  error <- (1/n)*sum((y_train - X_train%*%B)^2) # Error recalculation
+  gradient <- grad_mse_loss(y_train, X_train, B) # Gradient of param vector
+  B <- B - a * gradient # Gradient Descent
+  error <- mse_loss(y_train, X_train, B) # Error recalculation
   error_vector[iter] <- error # Store the error for this iteation
   
   # Evaluate stopping criteria 
