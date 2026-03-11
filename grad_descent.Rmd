@@ -36,9 +36,9 @@ head(Credit,3)
 
 ## Select Outcome Variable, Scale the Covariates
 ```{r}
-y <- as.matrix(Credit$Rating)
+y <- as.matrix(Credit$Balance)
 X <- Credit %>%
-  select(-Rating)
+  select(-Balance)
 
 X <- scale(X)
 head(round(X,3),3)
@@ -70,7 +70,7 @@ We seek to achieve local convergence with a gradient descent algorithm, on a 202
 y = X\beta
 \]
 
-Where $y$ is a vector of credit ratings, $X$ is a matrix of feature values, and $\beta \in \mathbb{R}^{m+1}$ is the vector of regression coefficients. By iteratively updating our coefficient vector optimally, we decrease the following loss function: 
+Where $y$ is a vector of credit balances, $X$ is a matrix of feature values, and $\beta \in \mathbb{R}^{m+1}$ is the vector of regression coefficients. By iteratively updating our coefficient vector optimally, we decrease the following loss function: 
 
 \[
 L(\beta) = \frac{1}{n} \sum^{n}_{i=1}(y_{i} - X_{i}\beta)^2
@@ -114,10 +114,10 @@ source("methods/mse_loss.R") # Calculates the error using the MSE loss function
 source("methods/grad_mse_loss.R") # Returns Negative Gradient of MSE loss function
 
 while (error_diff > 0.001){
-  
   # Update and Error calculation 
   gradient <- grad_mse_loss(y, X, B) # Gradient of param vector
   B <- B - a * gradient # Gradient Descent
+  y[y < 0] = 0 # maintain non-netative predictions
   error <- mse_loss(y, X, B) # Error recalculation
   error_vector[iter] <- error # Store the error for this iteation
   
@@ -125,9 +125,7 @@ while (error_diff > 0.001){
   if(iter > 1){
     error_diff <- abs(error_vector[iter]-error_vector[iter-1])
   }
-  else{
-    error_diff <- 1
-  }
+  else{error_diff <- 1}
   iter <- iter + 1 # increase iteration
 }
 cat("Grad Descent Successfully Converged in", iter, 
@@ -183,6 +181,7 @@ while (error_diff > 0.001 && iter < max_iter){
   # Update and Error calculation 
   gradient <- grad_mse_loss(y_train, X_train, B) # Gradient of param vector
   B <- B - a * gradient # Gradient Descent
+  y_train[y_train < 0] = 0 # maintain non-netative predictions
   error <- mse_loss(y_train, X_train, B) # Error recalculation
   error_vector[iter] <- error # Store the error for this iteation
   
@@ -197,6 +196,8 @@ cat("Grad Descent Successfully Converged in", iter,
 
 # Model Testing
 predictions <- X_test %*% B
+
+predictions[predictions < 0] = 0
 
 # Weighted Absolute Percent Error
 WAPE <- sum(abs(y_test - predictions))/sum(y_test)
@@ -218,10 +219,10 @@ X_Test_df <- data.frame(
 ggplot(X_Test_df, mapping = aes(x=real, y=preds))+
   geom_point(color='royalblue')+
   labs(
-    title = paste("Predicted Versus Actual Credit Rating, Accuracy = ", 
+    title = paste("Predicted Versus Actual Credit Balance, Accuracy = ", 
                   round(Accuracy*100,2), "%", sep=""),
-    x = "Real Credit Score",
-    y = "Predicted Credit Score"
+    x = "Real Credit Balance",
+    y = "Predicted Credit Balance"
   )
 ```
-We have successfully achieved an accuracy of ~98.00%, significantly outperforming the prepackaged regularized regression models.
+We have successfully achieved an accuracy of ~92.46%, slightly outperforming the prepackaged regularized regression models.
