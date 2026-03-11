@@ -1,4 +1,4 @@
-# Gradient Descent from Scratch: Credit Score Prediction
+# Gradient Descent from Scratch: Credit Balance Prediction
 
 **Author:** Luke Catalano  
 **Date:** March 9, 2026
